@@ -6,37 +6,44 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-const rooms = new Map();
+let rooms = []
 
 io.on('connection', (socket) => {
   console.log('a user connected');
+  socket.on('getAllRooms',()=>{
+    socket.emit("roomList",rooms)
+  })
+  
+  socket.on('createRoom',(data)=>{
+    rooms.unshift({
+      id:rooms.length+1,
+      roomId:data.roomId,
+      messages:[]
+    })
+    socket.join(data.roomId);
+    console.log(`${data.name} created room ${data.roomId}`);
+    console.log(rooms)
+  })
 
-  socket.on('joinRoom', ({ room }) => {
-    socket.join(room);
-    if (!rooms.has(room)) {
-      rooms.set(room, new Set());
+  socket.on("joinRoom", (data) => {
+    socket.join(data.roomId);
+    console.log(`${data.name} joined room ${data.roomId}`);
+  });
+
+  socket.on('newMessage',(data)=>{
+    const {message,roomId,name} = data
+    const room = rooms.filter((r)=>r.roomId === roomId)
+    const newmessage = {
+       name:name,
+       message:message
     }
-    rooms.get(room).add(socket.id);
-    console.log(`User ${socket.id} joined room ${room}`);
-  });
+    room[0].messages.push(newmessage)
+    io.to(roomId).emit('roomMessage',newmessage)
+    console.log(room[0].messages,roomId)
+  })
 
-  socket.on('message', (data) => {
-    io.to(room).emit('data',data);
-  });
 
-  socket.on('disconnect', () => {
-    console.log('user disconnected');
-    rooms.forEach((users, room) => {
-      if (users.has(socket.id)) {
-        users.delete(socket.id);
-        console.log(`User ${socket.id} left room ${room}`);
-        if (users.size === 0) {
-          rooms.delete(room);
-        }
-      }
-    });
-  });
-});
+})
 
 const PORT = process.env.PORT || 5000;
 
